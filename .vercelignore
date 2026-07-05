@@ -1,0 +1,8 @@
+node_modules
+dist
+.vercel
+*.log
+audit-runs
+audit-archive
+datasets
+tools

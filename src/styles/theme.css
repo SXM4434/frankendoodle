@@ -1,0 +1,147 @@
+@custom-variant dark (&:is(.dark *));
+
+:root,
+[data-direction="w1"] {
+  --font-size: 16px;
+
+  --dir-bg: #FDFCF9;
+  --dir-raised: #F9F7F3;
+  --dir-recessed: #F3F0E8;
+  --dir-muted: #EBE7DC;
+  --dir-text-primary: #121110;
+  --dir-text-body: #383632;
+  --dir-text-body-soft: #797369;
+  --dir-text-secondary: #5F5B54;
+  --dir-border: #E3DFD4;
+  --dir-accent: #121110;
+  --dir-detail: #878075;
+  --dir-exception-bg: #121110;
+  --dir-exception-text: #FDFCF9;
+  --dir-exception-accent: #878075;
+  --dir-cta-bg: #121110;
+  --dir-cta-text: #FDFCF9;
+  --dir-cta-border: transparent;
+  --dir-link-color: #121110;
+  --dir-chip-bg: transparent;
+  --dir-chip-border: #E3DFD4;
+}
+
+/* ============================================================
+   W1-D · Dark Companion to W1 Near-White Hold
+   ============================================================
+   B2 build 2026-05-25 — opt-in dark mode for the Homepage Surfaces v2 Lab
+   (covers homepage research routes AND the Gate A Ion shell at /gate-a/ion/r1).
+
+   Source of values: Color System Lab `[data-direction="w1-d"]` block
+   (same OKLCH-derived candidates, kept in sync until/unless hand-tune diverges).
+   Plan doc: `docs/labs/color/w1-dark-companion/w1-dark-companion-research-plan.md`.
+
+   Identity inversions:
+   · Warm dark ground (NOT pure black, NOT pure-neutral gray)
+   · Warm off-white ink (NOT pure white)
+   · Off-white IS the accent (mirror of W1's "graphite IS the accent")
+   · Exception zone CROSS-DERIVES to W1 light values
+
+   Boundary: this block does NOT replace W1. Default direction stays w1.
+   W1-D activates only when `data-direction="w1-d"` is set on the root,
+   driven by the LabShell direction-mode toggle (DirectionModeContext).
+   ============================================================ */
+[data-direction="w1-d"] {
+  --dir-bg: #16140F;
+  --dir-raised: #1F1D17;
+  --dir-recessed: #0F0D09;
+  --dir-muted: #1A1812;
+  --dir-text-primary: #ECE6D8;
+  --dir-text-body: #D4CDBC;
+  --dir-text-body-soft: #A39C8B;
+  --dir-text-secondary: #8B8475;
+  --dir-border: #2E2B24;
+  --dir-accent: #ECE6D8;
+  --dir-detail: #6E665A;
+  --dir-exception-bg: #FDFCF9;
+  --dir-exception-text: #121110;
+  --dir-exception-accent: #878075;
+  --dir-cta-bg: #ECE6D8;
+  --dir-cta-text: #16140F;
+  --dir-cta-border: transparent;
+  --dir-link-color: #ECE6D8;
+  --dir-chip-bg: transparent;
+  --dir-chip-border: #2E2B24;
+}
+
+@theme inline {
+  --color-bg: var(--dir-bg);
+  --color-raised: var(--dir-raised);
+  --color-recessed: var(--dir-recessed);
+  --color-muted: var(--dir-muted);
+  --color-text-primary: var(--dir-text-primary);
+  --color-text-body: var(--dir-text-body);
+  --color-text-body-soft: var(--dir-text-body-soft);
+  --color-text-secondary: var(--dir-text-secondary);
+  --color-border: var(--dir-border);
+  --color-accent: var(--dir-accent);
+  --color-detail: var(--dir-detail);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    font-size: var(--font-size);
+  }
+  body {
+    background-color: var(--dir-bg);
+    color: var(--dir-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    font-family: 'Instrument Sans', sans-serif;
+    font-weight: 400; /* was 300 — phantom: no loaded face had it (font survey 2026-06-11) */
+  }
+  a {
+    text-decoration: none;
+    color: var(--dir-link-color);
+  }
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--dir-accent) 50%, transparent);
+    outline-offset: 3px;
+  }
+}
+
+/* Pill slider track + round thumb — native range pseudo-elements can't be styled inline */
+input[type='range'].dd-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  background: transparent;
+}
+input[type='range'].dd-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--dir-border);
+}
+input[type='range'].dd-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--dir-text-primary);
+  border: none;
+  margin-top: -4px;
+}
+input[type='range'].dd-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--dir-border);
+}
+input[type='range'].dd-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--dir-text-primary);
+  border: none;
+}

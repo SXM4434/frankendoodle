@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+.claude/
+.vercel/output
+*.local
+.vite
+.DS_Store
+.env
+.env.local
+*.log
+audit-archive/
+# regeneratable ML capture intermediate (node tools/ml/capture-signals.mjs --serve)
+tools/ml/captured-signals.json
+.vercel
