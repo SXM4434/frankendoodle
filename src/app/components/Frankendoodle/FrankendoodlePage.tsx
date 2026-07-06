@@ -48,6 +48,7 @@ import {
   type PieceStyle,
 } from '../../lib/frankendoodle/compose';
 import { autoRig, rigDebugSvg } from '../../lib/frankendoodle/autoRig';
+import { bindSkin, poseNodes, poseStrokes, strokesToPathSvg } from '../../lib/frankendoodle/rigSkin';
 import {
   useGameRoom,
   makeRoomCode,
@@ -815,24 +816,45 @@ function Reveal(props: { panels: FdPanel[]; partnerName: string | null; onRestar
   );
 }
 
-// Debug: shows the skeleton the auto-rig extracted from the actual drawing —
-// bones (red), joints (blue), limb tips (green) — overlaid on the faint linework.
+// Debug: the drawing's OWN strokes, auto-rigged and articulating live. A generic
+// "alive" wiggle (deeper bones move more, phase-offset for secondary motion) so
+// any morphology moves. `?rig=skel` shows the extracted skeleton instead.
 function RigDebug({ panels }: { panels: FdPanel[] }) {
   const { viewBox: vb } = panelLayout(panels);
-  const rig = useMemo(() => autoRig(placedStrokes(panels)), [panels]);
-  const drawing = composeMarkup(panels, '#241f18').replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
-  const overlay = rigDebugSvg(rig, undefined, vb);
-  const joints = rig.nodes.filter((n) => n.kind === 'joint').length;
-  const tips = rig.nodes.filter((n) => n.kind === 'tip').length;
+  const { rig, binds, strokes } = useMemo(() => {
+    const strokes = placedStrokes(panels);
+    const rig = autoRig(strokes);
+    const binds = bindSkin(strokes, rig);
+    return { rig, binds, strokes };
+  }, [panels]);
+  const depths = useMemo(() => rig.bones.map((_, i) => { let d = 0, p = rig.bones[i].parent; while (p >= 0) { d++; p = rig.bones[p].parent; } return d; }), [rig]);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const showSkel = new URLSearchParams(window.location.search).get('rig') === 'skel';
+
+  useEffect(() => {
+    if (showSkel) { if (hostRef.current) hostRef.current.innerHTML = composeMarkup(panels, '#241f18').replace('<svg ', '<svg style="width:100%;height:100%;opacity:0.4" ') + rigDebugSvg(rig, undefined, vb); return; }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = (now - t0) / 1000;
+      const rot = rig.bones.map((_, i) => Math.sin(t * 2.6 + depths[i] * 0.9 + i * 0.7) * (0.06 + depths[i] * 0.07));
+      const posed = poseNodes(rig, rot);
+      const st = poseStrokes(strokes, binds, rig, posed);
+      if (hostRef.current) hostRef.current.innerHTML = strokesToPathSvg(st, vb, '#241f18', 4);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [rig, binds, strokes, depths, vb, showSkel, panels]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.md }}>
-      <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em', opacity: 0.5 }}>Auto-rig · skeleton read from the drawing</div>
+      <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em', opacity: 0.5 }}>{showSkel ? 'Auto-rig · skeleton read from the drawing' : 'Auto-rig · your drawing, alive'}</div>
       <div style={{ position: 'relative', aspectRatio: `${vb.w} / ${vb.h}`, height: 'min(66dvh, 560px)', maxWidth: '84vw', border: `1.5px solid ${ink}`, borderRadius: 16, background: paper, overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.38 }} dangerouslySetInnerHTML={{ __html: drawing }} />
-        <div style={{ position: 'absolute', inset: 0 }} dangerouslySetInnerHTML={{ __html: overlay }} />
+        <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
       </div>
       <div style={{ fontSize: 12.5, opacity: 0.62, fontVariantNumeric: 'tabular-nums' }}>
-        {rig.bones.length} bones · {joints} joints · {tips} tips · {rig.ok ? 'structure found' : 'best-effort stub'}
+        {rig.bones.length} bones · {rig.nodes.filter((n) => n.kind === 'joint').length} joints · rigged from your own strokes
       </div>
     </div>
   );
