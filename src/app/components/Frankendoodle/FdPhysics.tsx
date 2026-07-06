@@ -77,6 +77,8 @@ export function FdPhysics({
     blinkT: 0, eyeClose: 0, mouthOpen: 0,
     // a life of its own — ambient behaviour + when it last saw you (to come find you)
     beh: 'wander' as 'wander' | 'rest' | 'play' | 'seek', behT: 0, lastCurT: -999, playHopT: 0,
+    // living sound — footstep beat, landing edge, idle-mutter timer, one greet coo
+    stepPhase: 0, wasHopping: false, babbleT: 2, greetCoo: false,
   });
 
   useEffect(() => { fdAudioInit(); }, []);
@@ -173,7 +175,7 @@ export function FdPhysics({
         s.moodHold = 0.3;
       }
       // a returning friend recognises you and comes running (the felt "it remembers you")
-      if (s.greet > 0) { s.greet -= dt; s.mood = cursorOn ? 'playful' : 'happy'; s.moodHold = 0.3; s.energy = Math.min(1, s.energy + dt * 0.5); puff('heart', 1300); }
+      if (s.greet > 0) { if (!s.greetCoo) { s.greetCoo = true; fdSfx.coo(); } s.greet -= dt; s.mood = cursorOn ? 'playful' : 'happy'; s.moodHold = 0.3; s.energy = Math.min(1, s.energy + dt * 0.5); puff('heart', 1300); }
       // winning its trust is a visible moment
       const band = s.bond.trust > 0.75 ? 2 : s.bond.trust > 0.5 ? 1 : 0;
       if (band > s.trustBand) { if (band >= 2) { s.hop = 30; s.mood = 'happy'; s.moodHold = 1.3; s.squash = 0.16; puff('heart', 200); } s.trustBand = band; } else if (band < s.trustBand) s.trustBand = band;
@@ -208,6 +210,14 @@ export function FdPhysics({
       const breathe = Math.sin(s.phase * 2.1) * (0.02 + s.energy * 0.012);
       const sq = 1 + s.hop * 0.004 + breathe - s.squash;
       s.squash *= 0.85;
+
+      // ── living sound: footsteps on the gait beat, a thump on landing, idle mutters ──
+      const foot = Math.floor(s.walk * 2);
+      if (moving && speed > 44 && foot !== s.stepPhase) { s.stepPhase = foot; fdSfx.step(); }
+      else if (!moving) s.stepPhase = foot;
+      if (s.hop > 14) s.wasHopping = true;
+      else if (s.hop < 6 && s.wasHopping) { s.wasHopping = false; fdSfx.land(); }
+      if (s.phase > s.babbleT) { s.babbleT = s.phase + 3.5 + Math.random() * 4; if (s.mood !== 'sleepy' && s.startle <= 0) fdSfx.babble(Math.floor(s.phase * 7)); }
 
       // ── per-bone rotation: gait + breathe + startle flail (generic, any morphology) ──
       const rot = rig.bones.map((_, i) => {
