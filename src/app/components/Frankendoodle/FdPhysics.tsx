@@ -212,7 +212,7 @@ export function FdPhysics({
       // ── per-bone rotation: gait + breathe + startle flail (generic, any morphology) ──
       const rot = rig.bones.map((_, i) => {
         const mt = rigData.meta[i];
-        const gaitAmp = (0.05 + speed * 0.0016) * (0.35 + mt.depth * 0.45) * (0.45 + mt.vertical * 0.9);
+        const gaitAmp = (0.045 + speed * 0.0013) * (0.4 + mt.depth * 0.4) * (0.55 + mt.vertical * 0.3);
         const gait = Math.sin(s.walk * Math.PI * 2 + (mt.side > 0 ? 0 : Math.PI) + mt.depth * 0.6) * gaitAmp;
         const idle = Math.sin(s.phase * 1.7 + i * 1.3) * (0.02 + mt.depth * 0.02);
         const flail = s.startle * Math.sin(s.phase * 24 + i * 2.1) * (0.25 + mt.depth * 0.25);
