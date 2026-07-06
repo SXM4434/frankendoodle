@@ -4,6 +4,7 @@ import { IS } from '../../lib/typography';
 import { placedStrokes, type FdPanel } from '../../lib/frankendoodle/compose';
 import { autoRig, type Rig } from '../../lib/frankendoodle/autoRig';
 import { bindSkin, poseNodes, poseStrokes, type Bind } from '../../lib/frankendoodle/rigSkin';
+import { detectFeatures, applyFace } from '../../lib/frankendoodle/faceFeatures';
 import { fdSfx, fdAudioInit, fdSetMuted, fdMuted } from '../../lib/frankendoodle/fdSound';
 import type { StrokePoint } from '../DeskDoodles/DrawSurface';
 import type { F3SvgStyle } from '../../state/F3SvgStyleContext';
@@ -56,7 +57,8 @@ export function FdPhysics({
       const restAng = Math.atan2(c.y - a.y, c.x - a.x);
       return { depth, side, vertical: Math.abs(Math.sin(restAng)) };
     });
-    return { strokes, rig, binds, root, meta, bbox: rig.bbox };
+    const face = detectFeatures(strokes, rig.bbox, root); // its own eyes + mouth
+    return { strokes, rig, binds, root, meta, bbox: rig.bbox, face };
   }, [panels]);
 
   const persona = useMemo(() => {
@@ -71,6 +73,8 @@ export function FdPhysics({
     wx: 0, wy: 0, wanderT: 0, arcSign: 1, emoteAt: -9999, nearT: 0, inited: false,
     // the LEARNED bond — grows with kindness, shrinks with mistreatment; persisted.
     bond: { trust: 0.45, fam: 0, pets: 0, pokes: 0, plays: 0 }, greet: 0, trustBand: 0,
+    // its own face — blink timer + eased eye/mouth state
+    blinkT: 0, eyeClose: 0, mouthOpen: 0,
   });
 
   useEffect(() => { fdAudioInit(); }, []);
@@ -111,7 +115,8 @@ export function FdPhysics({
     const { rig, binds, strokes, root } = rigData;
     if (!rig.bones.length) return;
     const s = st.current;
-    (window as unknown as { __creature?: unknown }).__creature = s;
+    (window as unknown as { __creature?: unknown; __face?: unknown }).__creature = s;
+    (window as unknown as { __face?: unknown }).__face = { eyes: rigData.face.eyes, mouth: rigData.face.mouth };
     if (!s.inited) { s.x = size.w / 2; s.y = size.h * 0.5; s.inited = true; }
     let raf = 0, alive = true, last = performance.now();
     const bodyR = rigData.bbox.w * scale * 0.42 + 30;
@@ -198,6 +203,21 @@ export function FdPhysics({
       });
       const posed = poseNodes(rig, rot);
       const ps = poseStrokes(strokes, binds, rig, posed);
+
+      // ── its OWN face: blink, widen in fear, open its mouth to emote ──
+      if (rigData.face.eyes || rigData.face.mouth) {
+        if (s.blinkT === 0) s.blinkT = s.phase + 2 + Math.random() * 3;
+        let eyeClose = 0;
+        if (s.phase >= s.blinkT) { const bp = s.phase - s.blinkT; if (bp < 0.15) eyeClose = Math.sin((bp / 0.15) * Math.PI); else s.blinkT = s.phase + 2 + Math.random() * 3.5; }
+        if (s.mood === 'sleepy') eyeClose = Math.max(eyeClose, 0.82 + Math.sin(s.phase * 1.4) * 0.05); // dozes with eyes shut
+        s.eyeClose = eyeClose;
+        let mouthT = 0.05 + Math.sin(s.phase * 2.1) * 0.04; // resting breath
+        if (s.startle > 0.15) mouthT = 0.5 + s.startle * 0.4; // gasp
+        else if (s.mood === 'happy' || s.greet > 0) mouthT = 0.34 + Math.abs(Math.sin(s.phase * 7)) * 0.3; // chatter
+        else if (s.mood === 'playful' || s.mood === 'curious') mouthT = 0.14 + Math.abs(Math.sin(s.phase * 3.4)) * 0.12;
+        s.mouthOpen += (mouthT - s.mouthOpen) * Math.min(1, dt * 14);
+        applyFace(ps, rigData.face.tags, s.eyeClose, s.startle, s.mouthOpen);
+      }
 
       // map drawing space → screen (root at s.x,s.y; face flip; squash; hop)
       const hs = 1 / Math.sqrt(Math.max(0.5, sq));
