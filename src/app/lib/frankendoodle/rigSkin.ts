@@ -16,8 +16,12 @@ export interface Bind {
 }
 
 export function bindSkin(strokes: StrokePoint[][], rig: Rig): Bind[][] {
+  const rootN = rig.nodes[rig.root];
+  const coreR = rootN.thick * 1.25; // the rigid body core — its strokes don't deform
   return strokes.map((s) =>
     s.map(([x, y]): Bind => {
+      // points inside the body hub stay put (bone -1) so only limbs articulate
+      if (Math.hypot(x - rootN.x, y - rootN.y) < coreR) return { bone: -1, u: x, v: y };
       let best = 0, bestD = Infinity, bu = 0, bv = 0;
       rig.bones.forEach((bn, bi) => {
         const a = rig.nodes[bn.a], b = rig.nodes[bn.b];
@@ -67,6 +71,7 @@ export function poseStrokes(strokes: StrokePoint[][], binds: Bind[][], rig: Rig,
   return strokes.map((s, si) =>
     s.map(([, , pr], pi): StrokePoint => {
       const { bone, u, v } = binds[si][pi];
+      if (bone < 0) return [u, v, pr]; // rigid body core — u,v hold the original position
       const bn = rig.bones[bone];
       const a = posed[bn.a], b = posed[bn.b];
       const dx = b.x - a.x, dy = b.y - a.y;

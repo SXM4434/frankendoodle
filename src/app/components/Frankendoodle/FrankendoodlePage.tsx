@@ -837,7 +837,13 @@ function RigDebug({ panels }: { panels: FdPanel[] }) {
     const t0 = performance.now();
     const tick = (now: number) => {
       const t = (now - t0) / 1000;
-      const rot = rig.bones.map((_, i) => Math.sin(t * 2.6 + depths[i] * 0.9 + i * 0.7) * (0.06 + depths[i] * 0.07));
+      // upper segments swing gently from the hub; the segment PAST each joint
+      // bends hard, so the knee/elbow is unmistakable.
+      const rot = rig.bones.map((_, i) => {
+        const d = depths[i];
+        const amp = d === 0 ? 0.14 : 0.45;
+        return Math.sin(t * 2.3 + i * 1.7 + d * 1.2) * amp;
+      });
       const posed = poseNodes(rig, rot);
       const st = poseStrokes(strokes, binds, rig, posed);
       if (hostRef.current) hostRef.current.innerHTML = strokesToPathSvg(st, vb, '#241f18', 4);
@@ -1185,9 +1191,10 @@ export function FrankendoodlePage() {
     const ring = (cx: number, cy: number, rx: number, ry: number, n = 30): [number, number, number][] =>
       Array.from({ length: n + 1 }, (_, i) => { const a = (i / n) * Math.PI * 2; return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 0.6] as [number, number, number]; });
     const seg = (x1: number, y1: number, x2: number, y2: number): [number, number, number][] => [[x1, y1, 0.6], [x2, y2, 0.6]];
-    const head = [mk(ring(400, 160, 120, 128)), mk(ring(358, 150, 15, 18)), mk(ring(444, 150, 15, 18)), mk([[362, 205, 0.6], [400, 224, 0.6], [440, 203, 0.6]])];
-    const bodyP = [mk(ring(400, 330, 122, 108)), mk(seg(298, 306, 244, 350)), mk(seg(502, 306, 556, 350))];
-    const legs = [mk(seg(358, 436, 336, 566)), mk(seg(442, 436, 464, 566)), mk(seg(336, 566, 308, 578)), mk(seg(464, 566, 492, 578))];
+    const head = [mk(ring(400, 175, 108, 112)), mk(ring(362, 162, 14, 17)), mk(ring(440, 162, 14, 17)), mk([[366, 210, 0.6], [400, 228, 0.6], [436, 208, 0.6]])];
+    // arms + legs with a drawn ELBOW/KNEE bend so the joint has something to read
+    const bodyP = [mk(ring(400, 320, 100, 92)), mk([[308, 300, 0.6], [250, 360, 0.6], [230, 440, 0.6]]), mk([[492, 300, 0.6], [550, 360, 0.6], [570, 440, 0.6]])];
+    const legs = [mk([[364, 410, 0.6], [352, 500, 0.6], [326, 590, 0.6]]), mk([[436, 410, 0.6], [448, 500, 0.6], [474, 590, 0.6]]), mk(seg(326, 590, 296, 600)), mk(seg(474, 590, 504, 600))];
     const cfg: PieceStyle = { svgStyle: 'rough-handdrawn', mods: DEFAULT_MODIFIERS, toneFills: [] };
     room.submitPanel(head, cfg);
     room.submitPanel(bodyP, cfg);
