@@ -358,7 +358,7 @@ export function SurfaceControls({
       {/* MULTI-STROKE — Cluster 1 per I-13 */}
       {hasStrokeBlock && (
         <>
-          <div style={MINI_HEADER}>Multi-stroke</div>
+          <div style={MINI_HEADER}>Stroke</div>
           {has('multiStroke') && (
             <Dropdown
               label="Multi-stroke"

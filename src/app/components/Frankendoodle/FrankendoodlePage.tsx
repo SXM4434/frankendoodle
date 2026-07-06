@@ -56,6 +56,19 @@ import {
 const ink = 'var(--dir-text-primary)';
 const paper = 'var(--dir-bg)';
 const PART_ICON: DoodleName[] = ['head', 'body', 'legs'];
+// One 8-based spacing rhythm across every screen (tight within a group, one bigger gap between).
+const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
+// Text fields read as RECESSED (filled + inset shadow) so they never get mistaken for buttons.
+const fieldStyle: React.CSSProperties = {
+  fontFamily: IS,
+  fontSize: 16, // ≥16px so iOS doesn't zoom on focus (raunofreiberg)
+  borderRadius: 999,
+  border: `1.5px solid color-mix(in srgb, ${ink} 22%, transparent)`,
+  background: paper, // no muddy grey fill — recessed via the inset shadow instead
+  boxShadow: `inset 0 2px 4px color-mix(in srgb, ${ink} 9%, transparent)`,
+  color: ink,
+  textAlign: 'center',
+};
 type StyleCfg = { svgStyle: F3SvgStyle; mods: F3ModifiersState };
 const defaultCfg = (): StyleCfg => ({ svgStyle: 'rough-handdrawn', mods: DEFAULT_MODIFIERS });
 
@@ -100,6 +113,8 @@ function Shell({ children }: { children: ReactNode }) {
         background: paper,
         color: ink,
         fontFamily: IS,
+        WebkitFontSmoothing: 'antialiased',
+        textRendering: 'optimizeLegibility',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -111,6 +126,14 @@ function Shell({ children }: { children: ReactNode }) {
         WebkitTapHighlightColor: 'transparent',
       }}
     >
+      <style>{`
+        .fd-press{ transition: transform .12s cubic-bezier(0.16,1,0.3,1), opacity .12s ease; }
+        .fd-press:active:not(:disabled){ transform: scale(0.96); }
+        .fd-press:focus-visible, .fd-input:focus-visible{ outline: none; box-shadow: 0 0 0 2px var(--dir-bg), 0 0 0 4px var(--dir-text-primary); }
+        .fd-input{ outline: none; }
+        @keyframes fd-fade-up{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
+        @media (prefers-reduced-motion: reduce){ [class*="fd-"], [style*="animation"]{ animation-duration:.01ms!important; animation-iteration-count:1!important; } }
+      `}</style>
       {children}
     </div>
   );
@@ -120,7 +143,9 @@ function Wordmark({ small }: { small?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: small ? 2 : 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <FdDoodle name="monster" size={small ? 22 : 34} />
+        <span style={{ display: 'inline-flex', transform: `translateY(${small ? -1 : -2}px)` }}>
+          <FdDoodle name="monster" size={small ? 22 : 34} />
+        </span>
         <span style={{ fontSize: small ? 17 : 27, fontWeight: 700, letterSpacing: '-0.015em' }}>Frankendoodle</span>
       </div>
       <span style={{ fontSize: small ? 11 : 13, opacity: 0.5, letterSpacing: '0.01em' }}>draw a monster together</span>
@@ -143,32 +168,29 @@ function Pill({
 }) {
   return (
     <button
+      className="fd-press"
       onClick={onClick}
       disabled={disabled}
       style={{
         appearance: 'none',
-        border: `1.5px solid ${ink}`,
-        background: tone === 'solid' ? ink : 'transparent',
-        color: tone === 'solid' ? paper : ink,
+        border: '1.5px solid',
+        borderColor: disabled ? `color-mix(in srgb, ${ink} 30%, transparent)` : ink,
+        background: disabled ? 'transparent' : tone === 'solid' ? ink : 'transparent',
+        color: disabled ? `color-mix(in srgb, ${ink} 42%, transparent)` : tone === 'solid' ? paper : ink,
         fontFamily: IS,
         fontSize: small ? 12.5 : 14,
         fontWeight: 600,
-        padding: small ? '7px 14px' : '11px 20px',
+        padding: small ? '6px 14px' : '11px 20px',
         borderRadius: 999,
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.35 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 7,
+        justifyContent: 'center',
+        gap: 6,
+        minHeight: small ? 30 : 40,
         whiteSpace: 'nowrap',
-        transition: 'transform 0.12s ease, opacity 0.12s ease',
         touchAction: 'manipulation',
       }}
-      onPointerDown={(e) => {
-        if (!disabled) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.96)';
-      }}
-      onPointerUp={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)')}
-      onPointerLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)')}
     >
       {children}
     </button>
@@ -425,7 +447,7 @@ function DrawTurnInner({
 
   const seg = (on: boolean, dim = false): React.CSSProperties => ({
     appearance: 'none',
-    border: `1.4px solid ${ink}`,
+    border: `1.5px solid ${ink}`,
     background: on ? ink : 'transparent',
     color: on ? paper : ink,
     opacity: dim ? 0.3 : on ? 1 : 0.55,
@@ -462,25 +484,27 @@ function DrawTurnInner({
         <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em', opacity: 0.5 }}>
           Panel {panelIndex + 1} of {TOTAL_PANELS} · your turn
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 3 }}>
-          <FdDoodle name={PART_ICON[panelIndex]} size={26} />
-          <div style={{ fontSize: 23, fontWeight: 600 }}>Draw {PANEL_LABELS[panelIndex]}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: S.xs }}>
+          <span style={{ display: 'inline-flex', transform: 'translateY(-1px)' }}>
+            <FdDoodle name={PART_ICON[panelIndex]} size={26} />
+          </span>
+          <div style={{ fontSize: 23, fontWeight: 600, textWrap: 'balance' } as React.CSSProperties}>Draw {PANEL_LABELS[panelIndex]}</div>
         </div>
         <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2, maxWidth: 400 }}>{PANEL_HINTS[panelIndex]}</div>
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 8 }}>
-          <button onClick={() => setView('2d')} style={seg(view === '2d')}>2D</button>
-          <button onClick={() => strokes.length > 0 && setView('3d')} disabled={strokes.length === 0} style={seg(view === '3d', strokes.length === 0)}>3D</button>
+          <button className="fd-press" onClick={() => setView('2d')} style={seg(view === '2d')}>2D</button>
+          <button className="fd-press" onClick={() => strokes.length > 0 && setView('3d')} disabled={strokes.length === 0} style={seg(view === '3d', strokes.length === 0)}>3D</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center', alignItems: 'stretch', width: '100%' }}>
-        {/* LEFT — draw controls (vertical panel) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center', alignItems: 'flex-start', width: '100%' }}>
+        {/* LEFT — draw controls (vertical panel; hugs content so it isn't a half-empty box) */}
         <div style={{ order: wide ? 0 : 2 }}>
-          <div style={panelBox}>
+          <div style={{ ...panelBox, height: 'auto', maxHeight: wide ? 'min(74dvh, 640px)' : 'min(40dvh, 320px)' }}>
             <div style={eyebrow}>Draw controls</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {(['draw', 'style'] as const).map((m) => (
-                <button key={m} aria-pressed={composeMode === m} onClick={() => setComposeMode(m)} style={{ ...seg(composeMode === m), fontSize: 12, padding: '5px 12px' }}>
+                <button key={m} className="fd-press" aria-pressed={composeMode === m} onClick={() => setComposeMode(m)} style={{ ...seg(composeMode === m), fontSize: 12, padding: '6px 12px' }}>
                   {m === 'draw' ? 'Sketch' : 'Preview'}
                 </button>
               ))}
@@ -500,10 +524,7 @@ function DrawTurnInner({
               snapTitle={(a) => (a === 'snap' ? 'Snap the last stroke to the shape you drew' : 'Straighten the last stroke')}
               captionText=""
             />
-            <div>
-              <div style={{ ...eyebrow, marginBottom: 6 }}>Shapes</div>
-              <ShapeStrip armedShape={armedShape} onArmShape={setArmedShape} collapsed />
-            </div>
+            <ShapeStrip armedShape={armedShape} onArmShape={setArmedShape} collapsed />
           </div>
         </div>
 
@@ -517,7 +538,7 @@ function DrawTurnInner({
               aspectRatio: '4 / 3',
               maxHeight: panelH,
               border: `1.5px solid ${ink}`,
-              borderRadius: 18,
+              borderRadius: 16,
               overflow: 'hidden',
               background: paper,
               boxShadow: '0 8px 34px rgba(0,0,0,0.10)',
@@ -811,20 +832,6 @@ function RevealInner({
   // "Bring it to life" = the living, roaming, reactive creature (full screen).
   if (alive) return <FdPhysics panels={panels} configs={configs} onExit={() => setAlive(false)} />;
 
-  const seg = (on: boolean): React.CSSProperties => ({
-    appearance: 'none',
-    border: `1.4px solid ${ink}`,
-    background: on ? ink : 'transparent',
-    color: on ? paper : ink,
-    opacity: on ? 1 : 0.55,
-    fontFamily: IS,
-    fontSize: 12.5,
-    fontWeight: 600,
-    padding: '6px 16px',
-    borderRadius: 999,
-    cursor: 'pointer',
-    touchAction: 'manipulation',
-  });
   const panelBoxR: React.CSSProperties = {
     width: wide ? 290 : 'min(92vw, 460px)',
     height: wide ? 'min(62dvh, 540px)' : 'auto',
@@ -843,8 +850,10 @@ function RevealInner({
       <div>
         <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em', opacity: 0.5 }}>Your creature</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 1 }}>
-          <FdDoodle name="spark" size={22} />
-          <div style={{ fontSize: 28, fontWeight: 700 }}>It's alive!</div>
+          <span style={{ display: 'inline-flex', transform: 'translateY(-1px)' }}>
+            <FdDoodle name="spark" size={22} />
+          </span>
+          <div style={{ fontSize: 28, fontWeight: 700, textWrap: 'balance' } as React.CSSProperties}>It’s alive!</div>
         </div>
         <div style={{ fontSize: 12.5, opacity: 0.6, marginTop: 2 }}>Made by you {partnerName ? `& ${partnerName}` : '& your partner'}</div>
       </div>
@@ -859,7 +868,7 @@ function RevealInner({
               height: 'min(58dvh, 470px)',
               maxWidth: '72vw',
               border: `1.5px solid ${ink}`,
-              borderRadius: 18,
+              borderRadius: 16,
               overflow: 'hidden',
               background: paper,
               boxShadow: '0 12px 44px rgba(0,0,0,0.14)',
@@ -871,21 +880,30 @@ function RevealInner({
           {showConfetti && modes.some((m) => m === '2d') && <InkConfetti />}
         </div>
 
-        <div style={{ order: wide ? 2 : 3, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
-          {/* which part + is it 2D or 3D */}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.45 }}>Part</span>
+        <div
+          style={{
+            order: wide ? 2 : 3,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: S.md,
+            alignItems: 'stretch',
+            animation: `fd-fade-up 460ms cubic-bezier(0.2,0.8,0.25,1) ${revealDoneAt}ms both`,
+          }}
+        >
+          {/* which part */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.45 }}>Part</span>
             {(['all', 0, 1, 2] as Target[]).map((t) => (
               <Pill key={String(t)} small tone={target === t ? 'solid' : 'ghost'} onClick={() => setTarget(t)}>
                 {partName(t)}
-                {t !== 'all' && modes[t as number] === '3d' ? ' · 3D' : ''}
               </Pill>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.45 }}>Look</span>
-            <button onClick={() => setModeTo('2d')} style={seg(allTargetMode === '2d')}>2D</button>
-            <button onClick={() => setModeTo('3d')} style={seg(allTargetMode === '3d')}>Pop 3D</button>
+          {/* its look — same pill language as Part */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.45 }}>Look</span>
+            <Pill small tone={allTargetMode === '2d' ? 'solid' : 'ghost'} onClick={() => setModeTo('2d')}>2D</Pill>
+            <Pill small tone={allTargetMode === '3d' ? 'solid' : 'ghost'} onClick={() => setModeTo('3d')}>3D</Pill>
           </div>
 
           {targetIs3d ? (
@@ -911,7 +929,7 @@ function RevealInner({
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', gap: S.sm, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', animation: `fd-fade-up 460ms cubic-bezier(0.2,0.8,0.25,1) ${revealDoneAt + 120}ms both` }}>
         <Pill onClick={() => setAlive(true)}>
           Bring it to life <FdDoodle name="spark" size={15} engine={false} />
         </Pill>
@@ -962,54 +980,57 @@ function Lobby({
   }, [link]);
 
   return (
-    <>
-      <Wordmark />
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value.slice(0, 20))}
-        placeholder="your name"
-        style={{
-          fontFamily: IS,
-          fontSize: 15,
-          textAlign: 'center',
-          padding: '9px 16px',
-          borderRadius: 999,
-          border: `1.5px solid ${ink}`,
-          background: 'transparent',
-          color: ink,
-          outline: 'none',
-          width: 180,
-          marginTop: 4,
-        }}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.xl }}>
+      {/* identity */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.md }}>
+        <Wordmark />
+        <input
+          className="fd-input"
+          value={name}
+          onChange={(e) => setName(e.target.value.slice(0, 20))}
+          placeholder="your name"
+          aria-label="your name"
+          spellCheck={false}
+          autoComplete="off"
+          style={{ ...fieldStyle, padding: '11px 18px', width: 210 }}
+        />
+      </div>
       {myIndex === 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 13, opacity: 0.6 }}>Send this code to your partner:</div>
-          <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: '0.16em', paddingLeft: 18, lineHeight: 1 }}>{code}</div>
-          <Pill onClick={copy}>
-            {copied ? 'Copied' : 'Copy invite link'}
-            {copied && <FdDoodle name="check" size={15} engine={false} />}
-          </Pill>
-          <div style={{ fontSize: 12, opacity: 0.5, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 999, background: partnerHere ? '#3aa655' : ink, opacity: partnerHere ? 1 : 0.4 }} />
-            {partnerHere ? 'Partner connected — starting…' : 'Waiting for your partner to join…'}
+        <>
+          {/* your code to share */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.sm }}>
+            <div style={{ fontSize: 13, opacity: 0.6 }}>Send this code to your partner:</div>
+            <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: '0.16em', paddingLeft: '0.16em', lineHeight: 1 }}>{code}</div>
+            <Pill onClick={copy}>
+              {copied ? 'Copied' : 'Copy invite link'}
+              {copied && <FdDoodle name="check" size={15} engine={false} />}
+            </Pill>
+            <div style={{ fontSize: 12, opacity: 0.5, display: 'flex', alignItems: 'center', gap: 8, marginTop: S.xs }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: partnerHere ? '#3aa655' : ink, opacity: partnerHere ? 1 : 0.4 }} />
+              {partnerHere ? 'Partner connected — starting…' : 'Waiting for your partner to join…'}
+            </div>
           </div>
-          <div style={{ marginTop: 10, paddingTop: 14, borderTop: `1px solid ${ink}`, width: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.45 }}>Got a code instead?</div>
-            <div style={{ display: 'flex', gap: 8 }}>
+          {/* or join with a code */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.sm }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.45 }}>Got a code instead?</div>
+            <div style={{ display: 'flex', gap: S.sm }}>
               <input
+                className="fd-input"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))}
                 onKeyDown={(e) => e.key === 'Enter' && doJoin()}
                 placeholder="CODE"
-                style={{ fontFamily: IS, fontSize: 15, fontWeight: 700, letterSpacing: '0.12em', textAlign: 'center', width: 96, padding: '8px 10px', borderRadius: 999, border: `1.5px solid ${ink}`, background: 'transparent', color: ink, outline: 'none' }}
+                aria-label="join code"
+                spellCheck={false}
+                autoComplete="off"
+                style={{ ...fieldStyle, fontWeight: 700, letterSpacing: '0.14em', width: 118, padding: '11px 14px' }}
               />
               <Pill small onClick={doJoin} disabled={joinCode.length !== 4}>
                 Join
               </Pill>
             </div>
           </div>
-        </div>
+        </>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <div style={{ fontSize: 21, fontWeight: 600 }}>Joining room {code}</div>
@@ -1020,7 +1041,7 @@ function Lobby({
           <style>{`@keyframes fd-sway{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}}`}</style>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
