@@ -75,6 +75,8 @@ export function FdPhysics({
     bond: { trust: 0.45, fam: 0, pets: 0, pokes: 0, plays: 0 }, greet: 0, trustBand: 0,
     // its own face — blink timer + eased eye/mouth state
     blinkT: 0, eyeClose: 0, mouthOpen: 0,
+    // a life of its own — ambient behaviour + when it last saw you (to come find you)
+    beh: 'wander' as 'wander' | 'rest' | 'play' | 'seek', behT: 0, lastCurT: -999, playHopT: 0,
   });
 
   useEffect(() => { fdAudioInit(); }, []);
@@ -137,6 +139,8 @@ export function FdPhysics({
       const treatPt = treatRef.current;
       const dCur = cursorOn && hv ? Math.hypot(hv.x - s.x, hv.y - s.y) : Infinity;
       const cSpeed = hv ? Math.hypot(hv.vx, hv.vy) : 0;
+      if (cursorOn) s.lastCurT = s.phase;
+      const awayFor = s.phase - s.lastCurT;
 
       // familiarity grows just by spending time together
       s.bond.fam = Math.min(1, s.bond.fam + dt * 0.007);
@@ -147,12 +151,24 @@ export function FdPhysics({
       const startleSpeed = 1900 + s.bond.trust * 1700;
       if (cursorOn && cSpeed > startleSpeed && dCur < 150 && s.nearT > 0.08 && s.startleCool <= 0) { s.startle = 1; s.startleCool = 1.5; s.mood = 'startled'; s.moodHold = 0.7; s.hop = 26; fdSfx.startle(); puff('excl', 600); }
 
+      // ambient behaviour scheduler — it lives on its own, and when it trusts you it comes looking
+      if (!treatPt && s.startle <= 0 && s.greet <= 0 && s.phase > s.behT) {
+        s.behT = s.phase + 3 + Math.random() * 3;
+        const roll = Math.random();
+        if (s.energy < 0.2) s.beh = 'rest';
+        else if (s.bond.trust > 0.5 && awayFor > 6 && roll < 0.55) s.beh = 'seek'; // "where'd you go?"
+        else if (s.bond.trust > 0.6 && s.energy > 0.5 && roll < 0.4) s.beh = 'play';
+        else s.beh = 'wander';
+      }
+
       if (s.moodHold <= 0 && !dragging && s.startle <= 0) {
         const noticeR = 300 + s.bond.trust * 280; // bonded creatures notice you from farther and come over
         if (treatPt) s.mood = 'playful';
         else if (s.affection > 0.55) { s.mood = 'happy'; puff('heart', 1300); }
         else if (cursorOn && dCur < noticeR) { s.mood = s.energy > 0.45 ? 'playful' : 'curious'; puff(s.energy > 0.45 ? 'spark' : 'question', 2600); }
-        else if (s.energy < 0.14) { s.mood = 'sleepy'; puff('zzz', 2600); }
+        else if (s.beh === 'play') { s.mood = 'happy'; puff('spark', 2200); }
+        else if (s.beh === 'seek') { s.mood = 'curious'; puff(s.bond.trust > 0.7 ? 'heart' : 'question', 2200); }
+        else if (s.beh === 'rest' || s.energy < 0.14) { s.mood = 'sleepy'; puff('zzz', 2600); }
         else s.mood = 'idle';
         s.moodHold = 0.3;
       }
@@ -187,6 +203,8 @@ export function FdPhysics({
       s.walk += (moving ? speed * dt * 0.02 : dt * 0.5);
       if (Math.abs(s.vx) > 16) s.face = s.vx > 0 ? 1 : -1;
       s.hop *= 0.86;
+      if (s.beh === 'play' && s.mood === 'happy' && s.phase > s.playHopT) { s.hop = 22; s.playHopT = s.phase + 0.5; } // bouncy play
+      if (s.mood === 'sleepy') s.energy = Math.min(1, s.energy + dt * 0.05); // a nap restores it
       const breathe = Math.sin(s.phase * 2.1) * (0.02 + s.energy * 0.012);
       const sq = 1 + s.hop * 0.004 + breathe - s.squash;
       s.squash *= 0.85;
