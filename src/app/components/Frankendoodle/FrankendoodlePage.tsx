@@ -39,12 +39,15 @@ import {
   panelLayout,
   composeViewBox,
   panel3DStrokes,
+  placedStrokes,
+  composeMarkup,
   seamPeekMarkup,
   saveCompositePng,
   SEAM_FRAC,
   type FdPanel,
   type PieceStyle,
 } from '../../lib/frankendoodle/compose';
+import { autoRig, rigDebugSvg } from '../../lib/frankendoodle/autoRig';
 import {
   useGameRoom,
   makeRoomCode,
@@ -812,6 +815,29 @@ function Reveal(props: { panels: FdPanel[]; partnerName: string | null; onRestar
   );
 }
 
+// Debug: shows the skeleton the auto-rig extracted from the actual drawing —
+// bones (red), joints (blue), limb tips (green) — overlaid on the faint linework.
+function RigDebug({ panels }: { panels: FdPanel[] }) {
+  const { viewBox: vb } = panelLayout(panels);
+  const rig = useMemo(() => autoRig(placedStrokes(panels)), [panels]);
+  const drawing = composeMarkup(panels, '#241f18').replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
+  const overlay = rigDebugSvg(rig, undefined, vb);
+  const joints = rig.nodes.filter((n) => n.kind === 'joint').length;
+  const tips = rig.nodes.filter((n) => n.kind === 'tip').length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.md }}>
+      <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em', opacity: 0.5 }}>Auto-rig · skeleton read from the drawing</div>
+      <div style={{ position: 'relative', aspectRatio: `${vb.w} / ${vb.h}`, height: 'min(66dvh, 560px)', maxWidth: '84vw', border: `1.5px solid ${ink}`, borderRadius: 16, background: paper, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.38 }} dangerouslySetInnerHTML={{ __html: drawing }} />
+        <div style={{ position: 'absolute', inset: 0 }} dangerouslySetInnerHTML={{ __html: overlay }} />
+      </div>
+      <div style={{ fontSize: 12.5, opacity: 0.62, fontVariantNumeric: 'tabular-nums' }}>
+        {rig.bones.length} bones · {joints} joints · {tips} tips · {rig.ok ? 'structure found' : 'best-effort stub'}
+      </div>
+    </div>
+  );
+}
+
 function RevealInner({
   panels,
   partnerName,
@@ -1151,7 +1177,9 @@ export function FrankendoodlePage() {
   if (room.phase === 'lobby') {
     body = <Lobby code={code} myIndex={myIndex} name={name} setName={setName} partnerHere={room.bothPresent} />;
   } else if (room.phase === 'reveal') {
-    body = <Reveal panels={room.state.panels} partnerName={room.partnerName} onRestart={room.restart} />;
+    body = new URLSearchParams(window.location.search).has('rig')
+      ? <RigDebug panels={room.state.panels} />
+      : <Reveal panels={room.state.panels} partnerName={room.partnerName} onRestart={room.restart} />;
   } else if (room.isMyTurn) {
     body = <DrawTurn key={room.activePanel} panelIndex={room.activePanel} prevPanel={room.prevPanel} onDone={room.submitPanel} />;
   } else {

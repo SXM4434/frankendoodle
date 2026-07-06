@@ -135,6 +135,21 @@ export function panelMarkup(panels: FdPanel[], index: number, color?: string): s
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}">${body}</svg>`;
 }
 
+/** Every stroke placed into the composed-creature layout space (matches
+ * composeMarkup's viewBox). This is the creature's real linework, ready to
+ * feed the auto-rig skeleton extractor. */
+export function placedStrokes(panels: FdPanel[]): StrokePoint[][] {
+  const { placements } = layoutPanels(panels);
+  const out: StrokePoint[][] = [];
+  panels.forEach((p, i) => {
+    const { dx, dy } = placements[i];
+    p.strokes.forEach((s) => {
+      if (s.points.length) out.push(s.points.map(([x, y, pr]) => [x + dx, y + dy, pr] as StrokePoint));
+    });
+  });
+  return out;
+}
+
 /** The creature as stacked stroke points normalized to [0,w]×[0,h]. */
 export function compose3DStrokes(panels: FdPanel[]): StrokePoint[][] {
   const { placements, viewBox } = layoutPanels(panels);
