@@ -721,6 +721,35 @@ function Piece3D({ panel, portalChrome, slotEl }: { panel: FdPanel; portalChrome
   );
 }
 
+// The signature: hand-drawn X-sutures where the exquisite-corpse parts meet.
+// Every Frankendoodle wears its seams — it's literally stitched together.
+function Sutures({ panels, delay }: { panels: FdPanel[]; delay: number }) {
+  const { boxes, viewBox: vb } = panelLayout(panels);
+  const d: string[] = [];
+  for (let i = 0; i < boxes.length - 1; i++) {
+    const a = boxes[i];
+    const b = boxes[i + 1];
+    const seamY = (a.cy + a.h / 2 + (b.cy - b.h / 2)) / 2;
+    const cx = (a.cx + b.cx) / 2;
+    const span = Math.min(a.w, b.w) * 0.6;
+    const n = Math.max(3, Math.min(6, Math.round(span / 48)));
+    for (let k = 0; k < n; k++) {
+      const x = cx - span / 2 + (span * (k + 0.5)) / n;
+      const y = seamY + Math.sin((i * 5 + k) * 1.7) * 2.2; // deterministic hand-wobble
+      const s = 8 * (0.82 + ((i * 3 + k * 7) % 5) / 12);
+      d.push(`M${(x - s).toFixed(1)} ${(y - s).toFixed(1)} L${(x + s).toFixed(1)} ${(y + s).toFixed(1)}`);
+      d.push(`M${(x - s).toFixed(1)} ${(y + s).toFixed(1)} L${(x + s).toFixed(1)} ${(y - s).toFixed(1)}`);
+    }
+  }
+  if (!d.length) return null;
+  return (
+    <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="none" aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
+      <path d={d.join(' ')} fill="none" stroke={ink} strokeWidth={3.2} strokeLinecap="round" style={{ opacity: 0, animation: `fd-stitch 520ms cubic-bezier(0.2,0.8,0.25,1) ${delay}ms forwards` }} />
+      <style>{`@keyframes fd-stitch{0%{opacity:0;transform:scale(0.92)}60%{opacity:1}100%{opacity:1;transform:scale(1)}}`}</style>
+    </svg>
+  );
+}
+
 // The reveal stage: every part positioned in the composed creature, each part
 // independently 2D (styled SVG) or 3D (its own mount). Mirrors panelLayout so
 // 2D and 3D parts share the same slot geometry.
@@ -1098,6 +1127,25 @@ export function FrankendoodlePage() {
       restart: room.restart,
     };
   });
+
+  // Demo shortcut: /play?demo drops you straight into the reveal with a sample
+  // monster (no partner / drawing needed) so any screen can be seen + felt live.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('demo')) return;
+    if (room.state.panels.length > 0) return;
+    const mk = (points: [number, number, number][]): Stroke => ({ id: Math.random().toString(36).slice(2), points });
+    const ring = (cx: number, cy: number, rx: number, ry: number, n = 30): [number, number, number][] =>
+      Array.from({ length: n + 1 }, (_, i) => { const a = (i / n) * Math.PI * 2; return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 0.6] as [number, number, number]; });
+    const seg = (x1: number, y1: number, x2: number, y2: number): [number, number, number][] => [[x1, y1, 0.6], [x2, y2, 0.6]];
+    const head = [mk(ring(400, 160, 120, 128)), mk(ring(358, 150, 15, 18)), mk(ring(444, 150, 15, 18)), mk([[362, 205, 0.6], [400, 224, 0.6], [440, 203, 0.6]])];
+    const bodyP = [mk(ring(400, 330, 122, 108)), mk(seg(298, 306, 244, 350)), mk(seg(502, 306, 556, 350))];
+    const legs = [mk(seg(358, 436, 336, 566)), mk(seg(442, 436, 464, 566)), mk(seg(336, 566, 308, 578)), mk(seg(464, 566, 492, 578))];
+    const cfg: PieceStyle = { svgStyle: 'rough-handdrawn', mods: DEFAULT_MODIFIERS, toneFills: [] };
+    room.submitPanel(head, cfg);
+    room.submitPanel(bodyP, cfg);
+    room.submitPanel(legs, cfg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.state.panels.length]);
 
   let body: ReactNode;
   if (room.phase === 'lobby') {
