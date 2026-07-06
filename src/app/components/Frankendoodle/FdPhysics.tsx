@@ -70,7 +70,7 @@ export function FdPhysics({
     mood: 'curious' as Mood, energy: 0.6, affection: 0, moodHold: 0, startle: 0, startleCool: 0,
     wx: 0, wy: 0, wanderT: 0, arcSign: 1, emoteAt: -9999, nearT: 0, inited: false,
     // the LEARNED bond — grows with kindness, shrinks with mistreatment; persisted.
-    bond: { trust: 0.45, fam: 0, pets: 0, pokes: 0, plays: 0 },
+    bond: { trust: 0.45, fam: 0, pets: 0, pokes: 0, plays: 0 }, greet: 0, trustBand: 0,
   });
 
   useEffect(() => { fdAudioInit(); }, []);
@@ -78,7 +78,8 @@ export function FdPhysics({
   // the bond persists per-creature — it remembers you across sessions and grows up.
   const bondKey = useMemo(() => 'fd:bond:' + panels.reduce((a, p) => a + p.strokes.length * 7 + p.strokes.reduce((b, s) => b + s.points.length, 0), 0), [panels]);
   useEffect(() => {
-    try { const raw = localStorage.getItem(bondKey); if (raw) { const b = JSON.parse(raw); st.current.bond = { ...st.current.bond, ...b, plays: (b.plays || 0) + 1 }; } } catch { /* ignore */ }
+    try { const raw = localStorage.getItem(bondKey); if (raw) { const b = JSON.parse(raw); st.current.bond = { ...st.current.bond, ...b, plays: (b.plays || 0) + 1 }; if (st.current.bond.plays > 1 || st.current.bond.fam > 0.25) st.current.greet = 3; } } catch { /* ignore */ }
+    st.current.trustBand = st.current.bond.trust > 0.75 ? 2 : st.current.bond.trust > 0.5 ? 1 : 0;
     const save = () => { try { localStorage.setItem(bondKey, JSON.stringify(st.current.bond)); } catch { /* ignore */ } };
     const iv = setInterval(save, 4000);
     return () => { clearInterval(iv); save(); };
@@ -150,6 +151,11 @@ export function FdPhysics({
         else s.mood = 'idle';
         s.moodHold = 0.3;
       }
+      // a returning friend recognises you and comes running (the felt "it remembers you")
+      if (s.greet > 0) { s.greet -= dt; s.mood = cursorOn ? 'playful' : 'happy'; s.moodHold = 0.3; s.energy = Math.min(1, s.energy + dt * 0.5); puff('heart', 1300); }
+      // winning its trust is a visible moment
+      const band = s.bond.trust > 0.75 ? 2 : s.bond.trust > 0.5 ? 1 : 0;
+      if (band > s.trustBand) { if (band >= 2) { s.hop = 30; s.mood = 'happy'; s.moodHold = 1.3; s.squash = 0.16; puff('heart', 200); } s.trustBand = band; } else if (band < s.trustBand) s.trustBand = band;
 
       // goal + speed
       let tx = s.x, ty = s.y, speedWant = 0;
