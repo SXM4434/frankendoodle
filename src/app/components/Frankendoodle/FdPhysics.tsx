@@ -69,9 +69,20 @@ export function FdPhysics({
     x: 0, y: 0, vx: 0, vy: 0, walk: 0, phase: 0, face: 1, hop: 0, squash: 0,
     mood: 'curious' as Mood, energy: 0.6, affection: 0, moodHold: 0, startle: 0, startleCool: 0,
     wx: 0, wy: 0, wanderT: 0, arcSign: 1, emoteAt: -9999, nearT: 0, inited: false,
+    // the LEARNED bond — grows with kindness, shrinks with mistreatment; persisted.
+    bond: { trust: 0.45, fam: 0, pets: 0, pokes: 0, plays: 0 },
   });
 
   useEffect(() => { fdAudioInit(); }, []);
+
+  // the bond persists per-creature — it remembers you across sessions and grows up.
+  const bondKey = useMemo(() => 'fd:bond:' + panels.reduce((a, p) => a + p.strokes.length * 7 + p.strokes.reduce((b, s) => b + s.points.length, 0), 0), [panels]);
+  useEffect(() => {
+    try { const raw = localStorage.getItem(bondKey); if (raw) { const b = JSON.parse(raw); st.current.bond = { ...st.current.bond, ...b, plays: (b.plays || 0) + 1 }; } } catch { /* ignore */ }
+    const save = () => { try { localStorage.setItem(bondKey, JSON.stringify(st.current.bond)); } catch { /* ignore */ } };
+    const iv = setInterval(save, 4000);
+    return () => { clearInterval(iv); save(); };
+  }, [bondKey]);
 
   useLayoutEffect(() => {
     const el = arenaRef.current;
@@ -121,16 +132,20 @@ export function FdPhysics({
       const dCur = cursorOn && hv ? Math.hypot(hv.x - s.x, hv.y - s.y) : Infinity;
       const cSpeed = hv ? Math.hypot(hv.vx, hv.vy) : 0;
 
-      // petting
-      if (cursorOn && dCur < bodyR + 30 && cSpeed < 520 && !dragging && s.startle <= 0) { s.affection = Math.min(1, s.affection + dt * 1.3); s.energy = Math.min(1, s.energy + dt * 0.25); }
-      // startle (fast close swipe)
+      // familiarity grows just by spending time together
+      s.bond.fam = Math.min(1, s.bond.fam + dt * 0.007);
+      // petting builds trust
+      if (cursorOn && dCur < bodyR + 30 && cSpeed < 520 && !dragging && s.startle <= 0) { s.affection = Math.min(1, s.affection + dt * 1.3); s.energy = Math.min(1, s.energy + dt * 0.25); s.bond.trust = Math.min(1, s.bond.trust + dt * 0.05); s.bond.pets += dt; }
+      // startle — a trusting creature tolerates far more before it spooks
       if (cursorOn && dCur < 200) s.nearT += dt; else s.nearT = 0;
-      if (cursorOn && cSpeed > 2200 && dCur < 150 && s.nearT > 0.08 && s.startleCool <= 0) { s.startle = 1; s.startleCool = 1.5; s.mood = 'startled'; s.moodHold = 0.7; s.hop = 26; fdSfx.startle(); puff('excl', 600); }
+      const startleSpeed = 1900 + s.bond.trust * 1700;
+      if (cursorOn && cSpeed > startleSpeed && dCur < 150 && s.nearT > 0.08 && s.startleCool <= 0) { s.startle = 1; s.startleCool = 1.5; s.mood = 'startled'; s.moodHold = 0.7; s.hop = 26; fdSfx.startle(); puff('excl', 600); }
 
       if (s.moodHold <= 0 && !dragging && s.startle <= 0) {
+        const noticeR = 300 + s.bond.trust * 280; // bonded creatures notice you from farther and come over
         if (treatPt) s.mood = 'playful';
         else if (s.affection > 0.55) { s.mood = 'happy'; puff('heart', 1300); }
-        else if (cursorOn && dCur < 340) { s.mood = s.energy > 0.45 ? 'playful' : 'curious'; puff(s.energy > 0.45 ? 'spark' : 'question', 2600); }
+        else if (cursorOn && dCur < noticeR) { s.mood = s.energy > 0.45 ? 'playful' : 'curious'; puff(s.energy > 0.45 ? 'spark' : 'question', 2600); }
         else if (s.energy < 0.14) { s.mood = 'sleepy'; puff('zzz', 2600); }
         else s.mood = 'idle';
         s.moodHold = 0.3;
@@ -140,7 +155,7 @@ export function FdPhysics({
       let tx = s.x, ty = s.y, speedWant = 0;
       if (treatPt) { tx = treatPt.x; ty = treatPt.y; speedWant = 220 * persona.speed; if (Math.hypot(tx - s.x, ty - s.y) < 40) { setTreat(null); s.energy = Math.min(1, s.energy + 0.4); s.hop = 26; s.mood = 'happy'; s.moodHold = 0.7; fdSfx.munch(); puff('heart', 400); } }
       else if (s.startle > 0.2 && hv) { const dx = s.x - hv.x, dy = s.y - hv.y, d = Math.hypot(dx, dy) || 1; tx = s.x + (dx / d) * 300; ty = s.y + (dy / d) * 300; speedWant = 300 * (0.7 + persona.timid); }
-      else if ((s.mood === 'curious' || s.mood === 'playful') && hv) { const dx = hv.x - s.x, dy = hv.y - s.y, d = Math.hypot(dx, dy) || 1; const want = s.mood === 'playful' ? 70 : 108; tx = hv.x - (dx / d) * want; ty = hv.y - (dy / d) * want; speedWant = (s.mood === 'playful' ? 175 : 118) * persona.curiosity; }
+      else if ((s.mood === 'curious' || s.mood === 'playful') && hv) { const dx = hv.x - s.x, dy = hv.y - s.y, d = Math.hypot(dx, dy) || 1; const want = (s.mood === 'playful' ? 55 : 95) * (1.5 - s.bond.trust); tx = hv.x - (dx / d) * want; ty = hv.y - (dy / d) * want; speedWant = (s.mood === 'playful' ? 175 : 118) * persona.curiosity * (0.7 + s.bond.trust * 0.5); }
       else if (s.mood === 'happy' || s.mood === 'sleepy') speedWant = 0;
       else { if (s.phase > s.wanderT || Math.hypot(s.wx - s.x, s.wy - s.y) < 60) { s.wanderT = s.phase + 1.8 + Math.random() * 2.2; s.wx = Math.max(90, Math.min(size.w - 90, s.x < size.w / 2 ? size.w * (0.55 + Math.random() * 0.4) : size.w * (0.05 + Math.random() * 0.4))); s.wy = size.h * 0.32 + Math.random() * Math.max(1, size.h * 0.4); s.arcSign = Math.random() < 0.5 ? -1 : 1; } tx = s.wx; ty = s.wy; speedWant = 128 * persona.speed; }
 
@@ -215,10 +230,10 @@ export function FdPhysics({
   };
   const onUp = () => {
     const dr = dragRef.current; dragRef.current = null; const s = st.current;
-    if (dr && !dr.moved) { s.energy = Math.min(1, s.energy + 0.4); s.affection = Math.min(1, s.affection + 0.35); s.mood = 'happy'; s.moodHold = 0.9; s.hop = 34; s.squash = 0.14; fdSfx.poke(); puff('heart', 400); }
+    if (dr && !dr.moved) { s.energy = Math.min(1, s.energy + 0.4); s.affection = Math.min(1, s.affection + 0.35); s.mood = 'happy'; s.moodHold = 0.9; s.hop = 34; s.squash = 0.14; s.bond.pokes += 1; s.bond.trust = Math.max(0, s.bond.trust - 0.02); fdSfx.poke(); puff('heart', 400); }
     else if (dr && dr.moved) { s.mood = 'playful'; s.moodHold = 0.5; s.hop = 18; fdSfx.hop(); puff('spark', 600); }
   };
-  const shake = () => { const s = st.current; s.startle = 1; s.startleCool = 1.5; s.mood = 'startled'; s.moodHold = 1; s.hop = 24; s.vx = (Math.random() - 0.5) * 460; s.vy = (Math.random() - 0.5) * 260; fdSfx.startle(); puff('excl', 300); };
+  const shake = () => { const s = st.current; s.startle = 1; s.startleCool = 1.5; s.mood = 'startled'; s.moodHold = 1; s.hop = 24; s.vx = (Math.random() - 0.5) * 460; s.vy = (Math.random() - 0.5) * 260; s.bond.trust = Math.max(0, s.bond.trust - 0.07); fdSfx.startle(); puff('excl', 300); };
   const toggleMute = () => { const mm = !fdMuted(); fdSetMuted(mm); setMuted(mm); if (!mm) fdSfx.coo(); };
 
   return (
